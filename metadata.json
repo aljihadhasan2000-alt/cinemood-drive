@@ -1,0 +1,6 @@
+{
+  "name": "Cinemood Drive",
+  "description": "A modern, high-speed cinema link portal. Cinemood Drive provides instant search, custom download generators, secure verification counters, and a dark neon dashboard.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
