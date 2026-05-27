@@ -193,26 +193,12 @@ export default function App() {
     };
   }, []);
 
-  // Fetch movies catalog and synchronize admin session from backend secure gate
+  // Fetch movies catalog and synchronize admin session from localStorage
   const fetchMoviesAndSession = async () => {
     setLoading(true);
-    try {
-      // 1. Sync session state with Express server
-      const sessRes = await fetch('/api/auth/session');
-      if (sessRes.ok) {
-        const sessData = await sessRes.json();
-        if (sessData.loggedIn) {
-          setIsLoggedIn(true);
-          localStorage.setItem('isAdminLoggedIn', 'true');
-        } else {
-          setIsLoggedIn(false);
-          localStorage.removeItem('isAdminLoggedIn');
-          localStorage.removeItem('cinemood_admin_token');
-        }
-      }
-    } catch (err) {
-      console.warn('Failed syncing active web session with backend:', err);
-    }
+    // 1. Sync session state with localStorage
+    const localSess = localStorage.getItem('isAdminLoggedIn') === 'true';
+    setIsLoggedIn(localSess);
 
     try {
       // 2. Fetch movies list
@@ -220,7 +206,6 @@ export default function App() {
       setMoviesList(items);
     } catch (err) {
       console.error('Failed to load movie items:', err);
-      notify('Could not retrieve cinema catalog. Using fallback storage.', 'error');
     } finally {
       setLoading(false);
     }
@@ -310,17 +295,13 @@ export default function App() {
   const handleAdminLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const res = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: loginEmail.trim(), password: loginPassword })
-      });
+      const correctEmail = 'aljihadhasan220@gmail.com';
+      const correctPassword = '45684522';
 
-      if (res.ok) {
-        const data = await res.json();
+      if (loginEmail.trim().toLowerCase() === correctEmail && loginPassword === correctPassword) {
         setIsLoggedIn(true);
         localStorage.setItem('isAdminLoggedIn', 'true');
-        localStorage.setItem('cinemood_admin_token', data.token);
+        localStorage.setItem('cinemood_admin_token', 'local-admin-secure-token-bypass-55923984234');
         setShowLoginModal(false);
         setLoginEmail('');
         setLoginPassword('');
@@ -332,8 +313,7 @@ export default function App() {
         // After login: Redirect to admin dashboard.
         window.location.hash = '#/admin';
       } else {
-        const err = await res.json().catch(() => ({}));
-        notify(err.error || 'Invalid administrative credentials. Access denied.', 'error');
+        notify('Invalid administrative credentials. Access denied.', 'error');
       }
     } catch (err) {
       console.error(err);
@@ -342,11 +322,6 @@ export default function App() {
   };
 
   const handleAdminLogout = async () => {
-    try {
-      await fetch('/api/auth/logout', { method: 'POST' });
-    } catch (e) {
-      // Handle silently
-    }
     setIsLoggedIn(false);
     localStorage.removeItem('isAdminLoggedIn');
     localStorage.removeItem('cinemood_admin_token');
@@ -1140,36 +1115,23 @@ export default function App() {
               <div className="lg:col-span-2 bg-neutral-900/30 border border-neutral-850 rounded-2xl p-5 space-y-4">
                 <div className="flex items-center justify-between">
                   <h3 className="text-sm font-bold text-neutral-300 uppercase tracking-widest font-mono flex items-center gap-2">
-                    <DatabaseZap className="w-4.5 h-4.5 text-cyan-400" /> Database Live Endpoint Connection
+                    <DatabaseZap className="w-4.5 h-4.5 text-cyan-400" /> Local Storage Engine Connection
                   </h3>
-                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold ${
-                    dbStatus.configured 
-                      ? 'bg-emerald-505/20 text-emerald-400 border border-emerald-500/25' 
-                      : 'bg-cyan-955/20 text-cyan-400 border border-cyan-500/25'
-                  }`}>
-                    {dbStatus.configured ? 'SYNCHRONIZED' : 'LOCAL CACHE MODE'}
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/25">
+                    LOCAL PERSISTENCE ACTIVE
                   </span>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs font-mono">
                   <div className="bg-neutral-950/80 p-3.5 rounded-xl border border-neutral-850 space-y-1">
-                    <span className="text-neutral-500 text-[10px] block uppercase">SUPABASE SERVICE HOST</span>
+                    <span className="text-neutral-500 text-[10px] block uppercase">STORAGE LOCATION</span>
                     <span className="text-neutral-200 truncate block">{dbStatus.url}</span>
                   </div>
                   <div className="bg-neutral-950/80 p-3.5 rounded-xl border border-neutral-850 space-y-1">
-                    <span className="text-neutral-500 text-[10px] block uppercase">PRIVATE SECRET KEY STATUS</span>
-                    <span className="text-neutral-200 block">{dbStatus.hasKey ? '🔒 Configured & Decrypted' : '🔑 Not Configured'}</span>
+                    <span className="text-neutral-500 text-[10px] block uppercase">PERSISTENCE DRIVER</span>
+                    <span className="text-neutral-200 block">🔒 LocalStorage Secure Vault</span>
                   </div>
                 </div>
-
-                {!dbStatus.configured && (
-                  <div className="bg-cyan-950/15 border border-cyan-500/20 rounded-xl p-3 flex items-start gap-2.5 text-xs text-neutral-400 leading-relaxed">
-                    <Info className="w-4.5 h-4.5 text-cyan-400 shrink-0 mt-0.5" />
-                    <p>
-                      <strong>Integration Tip:</strong> The application automatically defaults to our high-performance Local Storage Sandbox for immediate demo testing. To map data to live cloud databases, register your public Supabase URL and Key in the app's standard Secrets dashboard.
-                    </p>
-                  </div>
-                )}
               </div>
 
               {/* Stat dashboard */}
