@@ -354,6 +354,26 @@ function AppContent() {
     }
   }, [selectedMovie]);
 
+  // Dynamically load Monetag Popunder script on public slug pages only, once per session
+  useEffect(() => {
+    if (activeSlug && !sessionStorage.getItem('monetag_popunder_loaded')) {
+      try {
+        const s = document.createElement('script');
+        s.dataset.zone = '11069724';
+        s.src = 'https://al5sm.com/tag.min.js';
+        s.async = true;
+        const target = [document.documentElement, document.body].filter(Boolean).pop();
+        if (target) {
+          target.appendChild(s);
+          sessionStorage.setItem('monetag_popunder_loaded', 'true');
+          console.log('Monetag popunder initialized silently in background.');
+        }
+      } catch (err) {
+        console.error('Failed to load Monetag popunder:', err);
+      }
+    }
+  }, [activeSlug]);
+
   // --- Admin Login & Session Authenticator Handlers ---
   const handleAdminLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1849,20 +1869,34 @@ function AppContent() {
 
                       {/* Final Download Button */}
                       <div className="w-full space-y-2.5 pb-1">
-                        <a
-                          href={selectedMovie?.download_url || "#"}
-                          target="_blank"
-                          rel="noopener noreferrer"
+                        <button
+                          type="button"
                           onClick={() => {
                             if (selectedMovie?.id) {
                               CinemoodDB.incrementDownloads(selectedMovie.id);
                               fetchMovies();
                             }
+
+                            // 1. First open the ad link
+                            const adWin = window.open('https://omg10.com/4/11069725', '_blank');
+                            if (adWin) {
+                              adWin.focus();
+                            }
+
+                            // 2. Open the actual download link in a new tab after a brief delay
+                            const downloadUrl = selectedMovie?.download_url || "#";
+                            setTimeout(() => {
+                              const dlWin = window.open(downloadUrl, '_blank');
+                              if (!dlWin) {
+                                // Fallback in case popup blocker stopped the second window.open
+                                window.location.href = downloadUrl;
+                              }
+                            }, 500);
                           }}
-                          className="w-full py-2.5 rounded-lg bg-gradient-to-r from-emerald-450 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-neutral-955 font-black tracking-wider uppercase text-xs flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(52,211,153,0.3)] hover:scale-[1.01] transition-all"
+                          className="w-full py-2.5 rounded-lg bg-gradient-to-r from-emerald-450 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-neutral-955 font-black tracking-wider uppercase text-xs flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(52,211,153,0.3)] hover:scale-[1.01] transition-all cursor-pointer border-none"
                         >
                           <Download className="w-4 h-4 text-neutral-955 shrink-0 animate-bounce" /> Unlock Direct Download
-                        </a>
+                        </button>
 
                         <button
                           type="button"
