@@ -24,7 +24,7 @@ const STATIC_MOVIES: MovieLink[] = [
     "slug": "kara-2026-dual-audio-480p",
     "description": "Kara (2026) Premium Dual Audio Streaming.",
     "poster_url": "https://images.unsplash.com/photo-1543722530-d2c3201371e7?w=600&auto=format&fit=crop&q=80",
-    "download_url": "https://cdn.cdn-hub.xyz/url?photo=OG9CcjFIQmZINDl4ZFZWbERqWFVpSEQwekpnRjl0L1B1U0VSMFMwZ3lxVnNJYlc3dTY2aUwxdDFlcFZzbzJsVGZuSlZpM1dGK0cxQUdMa3ExemVkeTBDUVBUQWZJOVl0QzVOZVJQREVOZ1E9",
+    "download_url": "https://hubcdn.org/dl/?link=https://hub.mandalorian.buzz/fe79472f8f940ecb879b7e867405fe29mVkeTBDUVBUQWZJOVl0QzVOZVJQREVOZ1E9",
     "year": "2026",
     "genre": "Action, Thriller",
     "quality": "480p",
