@@ -133,11 +133,14 @@ async function saveMoviesToDataSource(movies: any[]): Promise<boolean> {
 }
 
 async function writeMoviesToGitHub(movies: any[], config: GitHubConfig) {
-  const url = `https://api.github.com/repos/${config.owner}/${config.repo}/contents/data/links.json?ref=${config.branch}`;
+  const getUrl = `https://api.github.com/repos/${config.owner}/${config.repo}/contents/data/links.json?ref=${config.branch}`;
+  const putUrl = `https://api.github.com/repos/${config.owner}/${config.repo}/contents/data/links.json`;
+  
   let sha: string | undefined;
 
   try {
-    const response = await fetch(url, {
+    console.log(`[Database] Retrieving links.json SHA from GitHub: ${getUrl}`);
+    const response = await fetch(getUrl, {
       headers: {
         'Authorization': `token ${config.token}`,
         'Accept': 'application/vnd.github.v3+json',
@@ -147,6 +150,10 @@ async function writeMoviesToGitHub(movies: any[], config: GitHubConfig) {
     if (response.ok) {
       const data = await response.json() as any;
       sha = data.sha;
+      console.log(`[Database] Successfully retrieved current SHA: ${sha}`);
+    } else {
+      const errText = await response.text();
+      console.log(`[Database] SHA retrieval returned status ${response.status}: ${errText}`);
     }
   } catch (err) {
     console.warn('[Database] Could not load current SHA from GitHub contents:', err);
@@ -154,7 +161,9 @@ async function writeMoviesToGitHub(movies: any[], config: GitHubConfig) {
 
   const contentBase64 = Buffer.from(JSON.stringify(movies, null, 2), 'utf8').toString('base64');
 
-  const putResponse = await fetch(url, {
+  console.log(`[Database] Writing updated links.json to GitHub: ${putUrl} (branch: ${config.branch}, sha: ${sha || 'NEW_FILE'})`);
+
+  const putResponse = await fetch(putUrl, {
     method: 'PUT',
     headers: {
       'Authorization': `token ${config.token}`,
@@ -172,6 +181,7 @@ async function writeMoviesToGitHub(movies: any[], config: GitHubConfig) {
 
   if (!putResponse.ok) {
     const putErrText = await putResponse.text();
+    console.error(`[Database] GitHub PUT API call failed! Status: ${putResponse.status}. Response Body:`, putErrText);
     throw new Error(`GitHub contents commit returned status ${putResponse.status}: ${putErrText}`);
   }
   console.log('[Database] Permanent GitHub repository sync push complete!');
@@ -197,6 +207,156 @@ app.get('/api/status', (req, res) => {
     hasKey: configuredValue,
     provider: configuredValue ? 'GitHub API Persistent Storage' : 'Server-Side JSON Database Storage'
   });
+});
+
+// API ROUTE: Diagnostic test endpoint to verify GitHub connection, Repository access, and Write permissions
+app.get('/api/test-github', async (req, res) => {
+  const config = getGitHubConfig();
+  const report: any = {
+    timestamp: new Date().toISOString(),
+    config: {
+      token_configured: !!config.token,
+      token_preview: config.token ? `${config.token.substring(0, 4)}... (len: ${config.token.length})` : 'Missing',
+      owner: config.owner || 'Missing',
+      repo: config.repo || 'Missing',
+      branch: config.branch,
+      configured: isGitHubConfigured(config)
+    },
+    checks: {}
+  };
+
+  if (!isGitHubConfigured(config)) {
+    console.warn('[Diagnostics] GitHub storage is not configured in environment.');
+    return res.json({
+      success: false,
+      message: 'GitHub storage is not configured in the server environment (GITHUB_TOKEN, GITHUB_OWNER, GITHUB_REPO are required)',
+      report
+    });
+  }
+
+  try {
+    // Check 1: General connection & repository permissions
+    const repoUrl = `https://api.github.com/repos/${config.owner}/${config.repo}`;
+    console.log(`[Diagnostics] Testing connection to repo: ${repoUrl}`);
+    const repoResp = await fetch(repoUrl, {
+      headers: {
+        'Authorization': `token ${config.token}`,
+        'Accept': 'application/vnd.github.v3+json',
+        'User-Agent': 'Cinemood-Diagnostics'
+      }
+    });
+
+    report.checks.repo_api = {
+      status_code: repoResp.status,
+      ok: repoResp.ok
+    };
+
+    if (!repoResp.ok) {
+      const repoErr = await repoResp.text();
+      console.error(`[Diagnostics] GitHub Repo API returned status ${repoResp.status}:`, repoErr);
+      report.checks.repo_api.error = repoErr;
+      return res.json({ success: false, message: 'Failed to access the GitHub repository. Check credentials.', report });
+    }
+
+    const repoData = await repoResp.json() as any;
+    report.checks.repo_api.name = repoData.full_name;
+    report.checks.repo_api.permissions = repoData.permissions;
+
+    // Check 2: Try to read links.json
+    const getUrl = `https://api.github.com/repos/${config.owner}/${config.repo}/contents/data/links.json?ref=${config.branch}`;
+    console.log(`[Diagnostics] Testing GET for data/links.json: ${getUrl}`);
+    const getFileResp = await fetch(getUrl, {
+      headers: {
+        'Authorization': `token ${config.token}`,
+        'Accept': 'application/vnd.github.v3+json',
+        'User-Agent': 'Cinemood-Diagnostics'
+      }
+    });
+
+    report.checks.file_read = {
+      status_code: getFileResp.status,
+      ok: getFileResp.ok
+    };
+
+    if (getFileResp.ok) {
+      const fileData = await getFileResp.json() as any;
+      report.checks.file_read.sha = fileData.sha;
+      report.checks.file_read.size = fileData.size;
+    } else {
+      const getErr = await getFileResp.text();
+      console.warn(`[Diagnostics] GET links.json returned status ${getFileResp.status}:`, getErr);
+      report.checks.file_read.error = getErr;
+    }
+
+    // Check 3: Check write permissions via a temporary test file
+    const testPath = `data/test-write-${Date.now()}.json`;
+    const putUrl = `https://api.github.com/repos/${config.owner}/${config.repo}/contents/${testPath}`;
+    console.log(`[Diagnostics] Testing write access via PUT to: ${putUrl}`);
+
+    const testContent = Buffer.from(JSON.stringify({ test: "ok", time: new Date().toISOString() })).toString('base64');
+    const putResp = await fetch(putUrl, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `token ${config.token}`,
+        'Accept': 'application/vnd.github.v3+json',
+        'Content-Type': 'application/json',
+        'User-Agent': 'Cinemood-Diagnostics'
+      },
+      body: JSON.stringify({
+        message: 'Cinemood storage permissions test [skip ci]',
+        content: testContent,
+        branch: config.branch
+      })
+    });
+
+    report.checks.file_write = {
+      status_code: putResp.status,
+      ok: putResp.ok
+    };
+
+    if (putResp.ok) {
+      const putData = await putResp.json() as any;
+      const testSha = putData.content.sha;
+      console.log(`[Diagnostics] Write SUCCESS! SHA: ${testSha}. Attempting immediate deletion cleanup...`);
+
+      // Delete the test file to keep repo clean
+      const delResp = await fetch(putUrl, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `token ${config.token}`,
+          'Accept': 'application/vnd.github.v3+json',
+          'Content-Type': 'application/json',
+          'User-Agent': 'Cinemood-Diagnostics'
+        },
+        body: JSON.stringify({
+          message: 'Clean up diagnostics file [skip ci]',
+          sha: testSha,
+          branch: config.branch
+        })
+      });
+      console.log(`[Diagnostics] Cleanup delete response status: ${delResp.status}`);
+    } else {
+      const putErr = await putResp.text();
+      console.error(`[Diagnostics] PUT test-write returned status ${putResp.status}:`, putErr);
+      report.checks.file_write.error = putErr;
+    }
+
+    const overallSuccess = report.checks.repo_api.ok && report.checks.file_write.ok;
+    return res.json({
+      success: overallSuccess,
+      message: overallSuccess ? 'All GitHub checks passed successfully! Auto-save is fully operational.' : 'Some GitHub checks failed. See detailed report.',
+      report
+    });
+
+  } catch (err: any) {
+    console.error('[Diagnostics] Unexpected error during diagnostics run:', err);
+    return res.status(500).json({
+      success: false,
+      message: 'Unexpected internal diagnostics exception occurred',
+      error: err.message,
+      report
+    });
+  }
 });
 
 // API ROUTE: Get all links
