@@ -126,44 +126,10 @@ function AppContent() {
   const [loading, setLoading] = useState<boolean>(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [gatewayInput, setGatewayInput] = useState('');
-  
-  // --- App Diagnostics Status ---
-  const [dbStatus, setDbStatus] = useState(CinemoodDB.getConnectionStatus());
 
   // --- Notification System ---
   const [notifications, setNotifications] = useState<Notification[]>([]);
 
-  // --- Form Create/Edit Movie State ---
-  const [newTitle, setNewTitle] = useState('');
-  const [newSlug, setNewSlug] = useState('');
-  const [newPoster, setNewPoster] = useState('');
-  const [newDownload, setNewDownload] = useState('');
-  const [newDesc, setNewDesc] = useState('');
-  const [newYear, setNewYear] = useState('2026');
-  const [newGenre, setNewGenre] = useState('Action, Thriller');
-  const [newQuality, setNewQuality] = useState('1080p WebRip');
-  const [newSize, setNewSize] = useState('1.8 GB');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // --- Editable movie variables ---
-  const [editingMovie, setEditingMovie] = useState<MovieLink | null>(null);
-  const [editTitle, setEditTitle] = useState('');
-  const [editSlug, setEditSlug] = useState('');
-  const [editPoster, setEditPoster] = useState('');
-  const [editDownload, setEditDownload] = useState('');
-  const [editDesc, setEditDesc] = useState('');
-  const [editYear, setEditYear] = useState('');
-  const [editGenre, setEditGenre] = useState('');
-  const [editQuality, setEditQuality] = useState('');
-  const [editSize, setEditSize] = useState('');
-
-  // Auto-fill poster suggestions array
-  const POSTER_PRESETS = [
-    { name: 'Cinematic Blue', url: 'https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=600&auto=format&fit=crop&q=80' },
-    { name: 'Cosmic Nebula', url: 'https://images.unsplash.com/photo-1543722530-d2c3201371e7?w=600&auto=format&fit=crop&q=80' },
-    { name: 'Retro Neon Drive', url: 'https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=600&auto=format&fit=crop&q=80' },
-    { name: 'Techno Matrix', url: 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=600&auto=format&fit=crop&q=80' }
-  ];
 
   // --- Countdown & Verification Engine States ---
   const [countdown, setCountdown] = useState<number>(10);
@@ -285,10 +251,7 @@ function AppContent() {
     return () => clearTimeout(timer);
   }, []);
 
-  // Sync Diagnostics and Database client configuration automatically
-  useEffect(() => {
-    setDbStatus(CinemoodDB.getConnectionStatus());
-  }, [currentHash]);
+
 
   // Load a movie details view once a slug matches
   useEffect(() => {
@@ -326,12 +289,16 @@ function AppContent() {
   useEffect(() => {
     if (selectedMovie) {
       const titleStr = selectedMovie.title || "Untitled File";
-      const yearStr = selectedMovie.year || "";
-      const sizeStr = selectedMovie.size_gb || "";
-      const qualityStr = selectedMovie.quality || "";
+      const yearStr = selectedMovie.is_kara_special ? "" : (selectedMovie.year || "");
+      const sizeStr = selectedMovie.is_kara_special ? "" : (selectedMovie.size_gb || "");
+      const qualityStr = selectedMovie.is_kara_special ? "" : (selectedMovie.quality || "");
       const posterStr = selectedMovie.poster_url || "";
 
-      document.title = `${titleStr} ${yearStr ? `(${yearStr})` : ""} Premium Direct Download - Cinemood Drive`;
+      if (selectedMovie.is_kara_special) {
+        document.title = `${titleStr} - Secure Download Portal`;
+      } else {
+        document.title = `${titleStr} ${yearStr ? `(${yearStr})` : ""} Premium Direct Download - Cinemood Drive`;
+      }
       
       const updateMetaTag = (attributeName: string, attributeValue: string, contentValue: string) => {
         let meta = document.querySelector(`meta[${attributeName}="${attributeValue}"]`);
@@ -343,7 +310,11 @@ function AppContent() {
         meta.setAttribute('content', contentValue);
       };
 
-      updateMetaTag('name', 'description', `Instant high speed secure decrypted direct bypass fetch for ${titleStr} ${yearStr ? `(${yearStr})` : ""}. Size: ${sizeStr}, Video: ${qualityStr}.`);
+      if (selectedMovie.is_kara_special) {
+        updateMetaTag('name', 'description', `Secure multi-threaded high-speed gateway connection to fetch "${titleStr}". Bypass transit checks.`);
+      } else {
+        updateMetaTag('name', 'description', `Instant high speed secure decrypted direct bypass fetch for ${titleStr} ${yearStr ? `(${yearStr})` : ""}. Size: ${sizeStr}, Video: ${qualityStr}.`);
+      }
       updateMetaTag('property', 'og:title', `${titleStr} Premium Direct Stream - Cinemood`);
       updateMetaTag('property', 'og:description', `Unlock safe decrypted cloud storage nodes and direct multi-threaded streams for ${titleStr}.`);
       updateMetaTag('property', 'og:image', posterStr);
@@ -410,134 +381,6 @@ function AppContent() {
     localStorage.removeItem('cinemood_admin_token');
     notify('Safe shutdown logged. Session terminated.', 'info');
     window.location.hash = '#/';
-  };
-
-  // Auto-slugify title typed in form
-  const handleTitleChange = (val: string) => {
-    setNewTitle(val);
-    const slugified = val
-      .toLowerCase()
-      .trim()
-      .replace(/[^\w\s-]/g, '')
-      .replace(/[\s_]+/g, '-')
-      .replace(/^-+|-+$/g, '');
-    setNewSlug(slugified);
-  };
-
-  // Submit new Cinema download URL node
-  const handleAddMovie = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newTitle.trim() || !newSlug.trim() || !newDownload.trim()) {
-      notify('Please fill out all mandatory fields.', 'error');
-      return;
-    }
-
-    setIsSubmitting(true);
-    try {
-      // Validate unique slug
-      const existing = await CinemoodDB.getMovieBySlug(newSlug.trim());
-      if (existing) {
-        notify('This friendly URL slug already exists. Please choose a unique name.', 'error');
-        setIsSubmitting(false);
-        return;
-      }
-
-      await CinemoodDB.addMovie({
-        title: newTitle.trim(),
-        slug: newSlug.trim(),
-        description: newDesc.trim() || 'No description available for this cinematic release.',
-        poster_url: newPoster.trim() || 'https://images.unsplash.com/photo-1543722530-d2c3201371e7?w=600&auto=format&fit=crop&q=80',
-        download_url: newDownload.trim(),
-        year: newYear.trim() || '2026',
-        genre: newGenre.trim() || 'General',
-        quality: newQuality.trim() || '1080p HD',
-        size_gb: newSize.trim() || '1.5 GB'
-      });
-
-      notify(`Cinema Download link for "${newTitle}" created successfully!`, 'success');
-      
-      // Clean states
-      setNewTitle('');
-      setNewSlug('');
-      setNewPoster('');
-      setNewDownload('');
-      setNewDesc('');
-      setNewYear('2026');
-      setNewGenre('Action, Thriller');
-      setNewQuality('1080p WebRip');
-      setNewSize('1.8 GB');
-
-      // Refresh listings and navigate
-      await fetchMovies();
-      window.location.hash = '#/admin';
-    } catch (err) {
-      console.error(err);
-      notify('Failed to registry movie link.', 'error');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  // Start edit action hook
-  const handleEditClick = (movie: MovieLink) => {
-    setEditingMovie(movie);
-    setEditTitle(movie.title);
-    setEditSlug(movie.slug);
-    setEditPoster(movie.poster_url);
-    setEditDownload(movie.download_url);
-    setEditDesc(movie.description);
-    setEditYear(movie.year);
-    setEditGenre(movie.genre);
-    setEditQuality(movie.quality);
-    setEditSize(movie.size_gb);
-  };
-
-  // Save changes hook
-  const handleUpdateMovie = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingMovie) return;
-    if (!editTitle.trim() || !editSlug.trim() || !editDownload.trim()) {
-      notify('Mandatory fields are required.', 'error');
-      return;
-    }
-
-    try {
-      const res = await CinemoodDB.updateMovie(editingMovie.id, {
-        title: editTitle.trim(),
-        slug: editSlug.trim(),
-        poster_url: editPoster.trim(),
-        download_url: editDownload.trim(),
-        description: editDesc.trim(),
-        year: editYear.trim(),
-        genre: editGenre.trim(),
-        quality: editQuality.trim(),
-        size_gb: editSize.trim(),
-      });
-
-      if (res) {
-        notify(`"${editTitle}" has been updated and synchronized successfully!`, 'success');
-        setEditingMovie(null);
-        fetchMovies();
-      } else {
-        notify('Failed to save cinema updates.', 'error');
-      }
-    } catch (err) {
-      console.error(err);
-      notify('An error occurred during DB synchronization.', 'error');
-    }
-  };
-
-  // Delete movie helper
-  const handleDeleteMovie = async (id: string, title: string) => {
-    if (confirm(`Are you sure you want to delete the premium download link for "${title}"?`)) {
-      try {
-        await CinemoodDB.deleteMovie(id);
-        notify(`Deleted "${title}" successfully.`, 'info');
-        fetchMovies();
-      } catch (e) {
-        notify('Failed to delete link.', 'error');
-      }
-    }
   };
 
   // Copy URL action helper
@@ -743,40 +586,51 @@ function AppContent() {
       {/* Modern High-End Cinematic Navigation Header */}
       <header className="sticky top-0 z-30 bg-neutral-950/70 backdrop-blur-lg border-b border-neutral-800/80 transition-all">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2.5 sm:py-3 flex items-center justify-between">
-          <a 
-            href="#/" 
-            onClick={() => { window.location.hash = '#/'; }} 
-            className="flex items-center gap-2 sm:gap-3 group focus:outline-none"
-          >
-            <div className="relative">
-              <div className="absolute -inset-1 bg-gradient-to-r from-cyan-400 to-indigo-500 rounded-lg blur-sm opacity-70 group-hover:opacity-100 transition duration-300" />
+          {selectedMovie?.is_kara_special ? (
+            <div className="flex items-center gap-2 sm:gap-3 select-none">
               <div className="relative bg-neutral-950 p-1.5 sm:p-2 rounded-lg border border-cyan-500/30 flex items-center justify-center">
-                <Film className="w-5 h-5 sm:w-5.5 sm:h-5.5 text-cyan-400 group-hover:rotate-12 transition-all duration-300" />
+                <Film className="w-5 h-5 sm:w-5.5 sm:h-5.5 text-cyan-400" />
+              </div>
+              <div>
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <span className="font-extrabold text-base sm:text-lg tracking-tight bg-gradient-to-r from-neutral-50 to-neutral-200 bg-clip-text text-transparent">
+                    CINEMOOD
+                  </span>
+                  <span className="bg-neutral-900 text-cyan-400 border border-cyan-500/30 font-semibold px-1.5 py-0.5 rounded text-[8px] sm:text-[9px] tracking-widest uppercase shadow-[0_0_8px_rgba(6,182,212,0.15)]">
+                    DRIVE
+                  </span>
+                </div>
+                <p className="text-[8px] sm:text-[9.5px] text-neutral-400 tracking-wide font-mono leading-none mt-0.5">Bypass Traffic • Ultra High Speed CDN</p>
               </div>
             </div>
-            <div>
-              <div className="flex items-center gap-1.5 sm:gap-2">
-                <span className="font-extrabold text-base sm:text-lg tracking-tight bg-gradient-to-r from-neutral-50 to-neutral-200 bg-clip-text text-transparent">
-                  CINEMOOD
-                </span>
-                <span className="bg-neutral-900 text-cyan-400 border border-cyan-500/30 font-semibold px-1.5 py-0.5 rounded text-[8px] sm:text-[9px] tracking-widest uppercase shadow-[0_0_8px_rgba(6,182,212,0.15)]">
-                  DRIVE
-                </span>
+          ) : (
+            <a 
+              href="#/" 
+              onClick={() => { window.location.hash = '#/'; }} 
+              className="flex items-center gap-2 sm:gap-3 group focus:outline-none"
+            >
+              <div className="relative">
+                <div className="absolute -inset-1 bg-gradient-to-r from-cyan-400 to-indigo-500 rounded-lg blur-sm opacity-70 group-hover:opacity-100 transition duration-300" />
+                <div className="relative bg-neutral-950 p-1.5 sm:p-2 rounded-lg border border-cyan-500/30 flex items-center justify-center">
+                  <Film className="w-5 h-5 sm:w-5.5 sm:h-5.5 text-cyan-400 group-hover:rotate-12 transition-all duration-300" />
+                </div>
               </div>
-              <p className="text-[8px] sm:text-[9.5px] text-neutral-400 tracking-wide font-mono leading-none mt-0.5">Bypass Traffic • Ultra High Speed CDN</p>
-            </div>
-          </a>
+              <div>
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <span className="font-extrabold text-base sm:text-lg tracking-tight bg-gradient-to-r from-neutral-50 to-neutral-200 bg-clip-text text-transparent">
+                    CINEMOOD
+                  </span>
+                  <span className="bg-neutral-900 text-cyan-400 border border-cyan-500/30 font-semibold px-1.5 py-0.5 rounded text-[8px] sm:text-[9px] tracking-widest uppercase shadow-[0_0_8px_rgba(6,182,212,0.15)]">
+                    DRIVE
+                  </span>
+                </div>
+                <p className="text-[8px] sm:text-[9.5px] text-neutral-400 tracking-wide font-mono leading-none mt-0.5">Bypass Traffic • Ultra High Speed CDN</p>
+              </div>
+            </a>
+          )}
 
           {!activeSlug && (
             <div className="flex items-center gap-4">
-              {/* Real DB Environment Status Indicator */}
-              <div className="hidden md:flex items-center gap-2 bg-neutral-900/60 border border-neutral-800/90 rounded-full px-3 py-1 text-xs">
-                <span className={`w-1.5 h-1.5 rounded-full ${dbStatus.configured ? 'bg-emerald-500 animate-ping' : 'bg-cyan-400/80 animate-pulse'}`} />
-                <span className="text-neutral-400 font-mono text-[11px]">
-                  {dbStatus.provider}: <strong className="text-neutral-200">{dbStatus.configured ? 'Sync Active' : 'Sandbox (Stored)'}</strong>
-                </span>
-              </div>
-
               <nav className="flex items-center gap-2">
                 <a 
                   href="#/" 
@@ -883,20 +737,7 @@ function AppContent() {
 
               {/* HIGH-TECH SECURE ACCESS SYSTEM GATEWAY */}
               <div className="relative z-10 max-w-lg mx-auto space-y-4 pt-2">
-                <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-                  <button
-                    onClick={() => {
-                      if (isLoggedIn) {
-                        window.location.hash = '#/admin/create';
-                      } else {
-                        setShowLoginModal(true);
-                      }
-                    }}
-                    className="px-5 py-2.5 sm:py-3 rounded-xl bg-gradient-to-r from-cyan-500 via-sky-400 to-indigo-500 hover:from-cyan-400 hover:to-indigo-500 text-neutral-950 font-black text-[11px] uppercase tracking-[0.15em] transition duration-300 flex items-center justify-center gap-1.5 shadow-[0_0_20px_rgba(6,182,212,0.25)] w-full sm:w-auto cursor-pointer border border-cyan-400/20 group hover:shadow-[0_0_30px_rgba(6,182,212,0.45)] hover:scale-[1.01] transform"
-                  >
-                    <Plus className="w-3.5 h-3.5 text-neutral-950 transition-transform group-hover:rotate-90" /> Create Link
-                  </button>
-
+                <div className="flex justify-center">
                   <button
                     onClick={() => {
                       if (isLoggedIn) {
@@ -905,9 +746,9 @@ function AppContent() {
                         setShowLoginModal(true);
                       }
                     }}
-                    className="px-5 py-2.5 sm:py-3 rounded-xl bg-neutral-950 border border-neutral-850 hover:border-cyan-500/35 text-neutral-300 hover:text-white transition duration-300 text-[11px] font-black uppercase tracking-[0.15em] flex items-center justify-center gap-1.5 w-full sm:w-auto cursor-pointer hover:bg-neutral-900 shadow-[0_0_15px_rgba(0,0,0,0.5)]"
+                    className="px-6 py-3 rounded-xl bg-gradient-to-r from-cyan-400 to-indigo-500 hover:from-cyan-300 hover:to-indigo-400 text-neutral-950 font-black text-xs uppercase tracking-[0.15em] transition duration-300 flex items-center justify-center gap-1.5 shadow-[0_0_20px_rgba(6,182,212,0.25)] w-full sm:w-auto cursor-pointer border border-cyan-400/20 group hover:shadow-[0_0_30px_rgba(6,182,212,0.45)] hover:scale-[1.01] transform"
                   >
-                    <Sliders className="w-3.5 h-3.5 text-cyan-400" /> Admin Console
+                    <Sliders className="w-3.5 h-3.5 text-neutral-950" /> Admin Console
                   </button>
                 </div>
 
@@ -929,7 +770,7 @@ function AppContent() {
                     </button>
                   </div>
                   <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto pr-1">
-                    {moviesList.slice(0, 6).map((m) => (
+                    {moviesList.filter(m => !m.is_kara_special).slice(0, 6).map((m) => (
                       <button
                         key={m.id}
                         onClick={() => {
@@ -1177,12 +1018,7 @@ function AppContent() {
                   <RefreshCw className="w-3 h-3 text-cyan-400" /> Refresh State
                 </button>
 
-                <a 
-                  href="#/admin/create"
-                  className="px-2.5 py-1.5 rounded-lg bg-gradient-to-r from-cyan-500 to-sky-600 text-neutral-950 font-bold hover:shadow-[0_0_15px_rgba(6,182,212,0.3)] transition text-[10px] sm:text-xs flex items-center gap-1"
-                >
-                  <Plus className="w-3.5 h-3.5" /> Create Link
-                </a>
+
 
                 <button
                   onClick={handleAdminLogout}
@@ -1194,57 +1030,10 @@ function AppContent() {
               </div>
             </div>
 
-            {/* Configured Credentials diagnostic block */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-              
-              <div className="lg:col-span-2 bg-neutral-900/30 border border-neutral-850 rounded-xl p-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-xs font-bold text-neutral-300 uppercase tracking-widest font-mono flex items-center gap-1.5">
-                    <DatabaseZap className="w-4 h-4 text-cyan-400" /> Local Storage Engine Connection
-                  </h3>
-                  <span className="px-2 py-0.5 rounded-full text-[9px] font-mono font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/25">
-                    LOCAL ACTIONS
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-[11px] font-mono">
-                  <div className="bg-neutral-950/80 p-2.5 rounded-lg border border-neutral-850 space-y-0.5">
-                    <span className="text-neutral-500 text-[9px] block uppercase">STORAGE LOCATION</span>
-                    <span className="text-neutral-200 truncate block">{dbStatus.url}</span>
-                  </div>
-                  <div className="bg-neutral-950/80 p-2.5 rounded-lg border border-neutral-850 space-y-0.5">
-                    <span className="text-neutral-500 text-[9px] block uppercase">PERSISTENCE DRIVER</span>
-                    <span className="text-neutral-200 block">🔒 LocalStorage Secure Vault</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Stat dashboard */}
-              <div className="bg-neutral-900/30 border border-neutral-850 rounded-xl p-4 flex flex-col justify-between space-y-3">
-                <h3 className="text-xs font-bold text-neutral-300 uppercase tracking-widest font-mono flex items-center gap-1.5">
-                  <Cpu className="w-4 h-4 text-cyan-400" /> Performance Console
-                </h3>
-                
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between text-[11px]">
-                    <span className="text-neutral-400">Database Uptime</span>
-                    <span className="font-mono text-cyan-400 font-bold">100.00%</span>
-                  </div>
-                  <div className="flex items-center justify-between text-[11px]">
-                    <span className="text-neutral-400">API Response Time</span>
-                    <span className="font-mono text-neutral-200">{dbStatus.configured ? '~42ms' : '0.1ms (Local)'}</span>
-                  </div>
-                  <div className="flex items-center justify-between text-[11px]">
-                    <span className="text-neutral-400">Indexed Links Count</span>
-                    <span className="font-mono text-neutral-200 font-bold">{moviesList.length} items</span>
-                  </div>
-                </div>
-
-                <div className="pt-1.5 border-t border-neutral-850 text-[10px] text-neutral-500">
-                  Last monitored: {new Date().toLocaleTimeString()}
-                </div>
-              </div>
-
+            {/* Ambient System Mode Banner */}
+            <div className="p-4 rounded-xl border border-cyan-500/10 bg-neutral-900/30 font-mono text-[11px] text-neutral-400 flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+              <span>Cinemood Drive is operating in <strong>Static Download Portal Mode</strong>. All download pathways are hardcoded directly into the application code.</span>
             </div>
 
             {/* Interactive Analytics & Performance Charts Block */}
@@ -1348,7 +1137,7 @@ function AppContent() {
                                 src={m.poster_url} 
                                 alt="" 
                                 className="w-7 h-10 rounded object-cover border border-neutral-850 bg-neutral-900 shrink-0"
-                                onError={(e) => { (e.target as HTMLImageElement).src = POSTER_PRESETS[0].url; }}
+                                onError={(e) => { (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1543722530-d2c3201371e7?w=600&auto=format&fit=crop&q=80'; }}
                               />
                               <div>
                                 <span className="font-bold text-neutral-200 block truncate max-w-[120px] sm:max-w-xs">{m.title}</span>
@@ -1397,21 +1186,6 @@ function AppContent() {
                                 <ExternalLink className="w-3.5 h-3.5" />
                               </a>
 
-                              <button
-                                onClick={() => handleEditClick(m)}
-                                className="p-1.5 rounded-md bg-neutral-950 hover:bg-neutral-850 border border-neutral-850 text-neutral-400 hover:text-yellow-400 transition"
-                                title="Edit Entry Details"
-                              >
-                                <Pencil className="w-3 h-3" />
-                              </button>
-
-                              <button
-                                onClick={() => handleDeleteMovie(m.id, m.title)}
-                                className="p-1.5 rounded-md bg-neutral-950 hover:bg-red-950/80 border border-neutral-850 text-neutral-400 hover:text-red-400 transition"
-                                title="Delete Entry"
-                              >
-                                <Trash2 className="w-3 h-3" />
-                              </button>
                             </div>
                           </td>
                         </tr>
@@ -1421,284 +1195,6 @@ function AppContent() {
                 </div>
               )}
             </section>
-
-                       {/* INLINE EDIT MODE DIALOG (Glassmorphic Slide-over Modal Overlay) */}
-            {editingMovie && (
-              <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-neutral-950/85 backdrop-blur-md animate-fade-in animate-duration-250">
-                <div className="bg-neutral-900 border border-neutral-800 rounded-xl max-w-lg w-full max-h-[95vh] overflow-y-auto p-4 sm:p-5 space-y-4 relative shadow-2xl">
-                  
-                  <div className="flex items-center justify-between border-b border-neutral-850 pb-3">
-                    <div className="flex items-center gap-1.5">
-                      <Pencil className="w-4 h-4 text-cyan-400" />
-                      <div>
-                        <h2 className="text-sm font-black text-neutral-100 uppercase tracking-tight">Edit Portal Link</h2>
-                        <p className="text-[9px] text-neutral-500 font-mono">ID: {editingMovie.id}</p>
-                      </div>
-                    </div>
-                    <button 
-                      type="button"
-                      onClick={() => setEditingMovie(null)}
-                      className="text-neutral-450 hover:text-white text-[10px] font-bold font-mono px-2 py-0.5 rounded bg-neutral-950 border border-neutral-800 transition"
-                    >
-                      ✕ Close
-                    </button>
-                  </div>
-
-                  <form onSubmit={handleUpdateMovie} className="space-y-3 text-left">
-                    <div className="space-y-1">
-                      <label className="text-[9px] font-bold text-neutral-400 uppercase tracking-widest font-mono block">Film Title *</label>
-                      <input
-                        type="text"
-                        required
-                        className="w-full px-3 py-2 rounded-lg bg-neutral-950 border border-neutral-800 text-xs focus:border-cyan-500/50 focus:outline-none text-white font-medium"
-                        value={editTitle}
-                        onChange={(e) => setEditTitle(e.target.value)}
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-1">
-                        <label className="text-[9px] font-bold text-neutral-400 uppercase tracking-widest font-mono block">Friendly Slug *</label>
-                        <input
-                          type="text"
-                          required
-                          className="w-full px-3 py-2 rounded-lg bg-neutral-950 border border-neutral-800 text-cyan-400 font-mono text-xs focus:border-cyan-500/50 focus:outline-none"
-                          value={editSlug}
-                          onChange={(e) => setEditSlug(e.target.value)}
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-[9px] font-bold text-neutral-400 uppercase tracking-widest font-mono block">Release Year</label>
-                        <input
-                          type="text"
-                          className="w-full px-3 py-2 rounded-lg bg-neutral-950 border border-neutral-800 text-xs focus:border-cyan-500/50 focus:outline-none text-white font-mono"
-                          value={editYear}
-                          onChange={(e) => setEditYear(e.target.value)}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-1">
-                        <label className="text-[9px] font-bold text-neutral-400 uppercase tracking-widest font-mono block">Genres</label>
-                        <input
-                          type="text"
-                          className="w-full px-3 py-2 rounded-lg bg-neutral-950 border border-neutral-800 text-xs focus:border-cyan-500/50 focus:outline-none text-white font-medium"
-                          value={editGenre}
-                          onChange={(e) => setEditGenre(e.target.value)}
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-[9px] font-bold text-neutral-400 uppercase tracking-widest font-mono block">Format Size</label>
-                        <input
-                          type="text"
-                          className="w-full px-3 py-2 rounded-lg bg-neutral-950 border border-neutral-800 text-xs focus:border-cyan-500/50 focus:outline-none text-white font-mono"
-                          value={editSize}
-                          onChange={(e) => setEditSize(e.target.value)}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-1">
-                        <label className="text-[9px] font-bold text-neutral-400 uppercase tracking-widest font-mono block">Quality Label</label>
-                        <input
-                          type="text"
-                          className="w-full px-3 py-2 rounded-lg bg-neutral-950 border border-neutral-800 text-xs focus:border-cyan-500/50 focus:outline-none text-white font-medium"
-                          value={editQuality}
-                          onChange={(e) => setEditQuality(e.target.value)}
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-[9px] font-bold text-neutral-400 uppercase tracking-widest font-mono block">Poster Template URL</label>
-                        <input
-                          type="url"
-                          className="w-full px-3 py-2 rounded-lg bg-neutral-950 border border-neutral-800 text-[10px] font-mono focus:border-cyan-500/50 focus:outline-none text-white"
-                          value={editPoster}
-                          onChange={(e) => setEditPoster(e.target.value)}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="space-y-1">
-                      <label className="text-[9px] font-bold text-neutral-400 uppercase tracking-widest font-mono block">Core Target Torrent / Magnet Link *</label>
-                      <input
-                        type="url"
-                        required
-                        className="w-full px-3 py-2 rounded-lg bg-neutral-950 border border-neutral-800 text-cyan-400 font-mono text-xs focus:border-cyan-500/50 focus:outline-none"
-                        value={editDownload}
-                        onChange={(e) => setEditDownload(e.target.value)}
-                      />
-                    </div>
-
-                    <div className="space-y-1">
-                      <label className="text-[9px] font-bold text-neutral-400 uppercase tracking-widest font-mono block">Synopsys Description</label>
-                      <textarea
-                        rows={2}
-                        className="w-full px-3 py-1.5 rounded-lg bg-neutral-950 border border-neutral-800 text-xs focus:border-cyan-500/50 focus:outline-none text-white leading-tight resize-none"
-                        value={editDesc}
-                        onChange={(e) => setEditDesc(e.target.value)}
-                      />
-                    </div>
-
-                    <div className="pt-3 flex items-center justify-end gap-2.5 border-t border-neutral-850">
-                      <button
-                        type="button"
-                        onClick={() => setEditingMovie(null)}
-                        className="px-3 py-1.5 border border-neutral-800 text-neutral-400 hover:text-white rounded-lg text-[11px] font-bold transition"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="submit"
-                        className="px-4 py-1.5 bg-gradient-to-r from-cyan-400 to-sky-600 text-neutral-950 font-black rounded-lg text-[11px] hover:shadow-[0_0_15px_rgba(6,182,212,0.4)] transition duration-200"
-                      >
-                        Save & Deploy Updates
-                      </button>
-                    </div>
-                  </form>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ==================== 3. CREATE DYNAMIC LINK FORM VIEW ==================== */}
-        {(currentHash === '#/admin/create' && isLoggedIn) && (
-          <div className="space-y-5 animate-fade-in text-left">
-            {/* Path Breadcrumbs */}
-            <div className="space-y-0.5">
-              <div className="flex items-center gap-1 text-[10px] text-neutral-400 font-mono">
-                <a href="#/" onClick={() => { window.location.hash = '#/'; }} className="hover:text-cyan-400">Cinemood Drive</a>
-                <span>/</span>
-                <a href="#/admin" onClick={() => { window.location.hash = '#/admin'; }} className="hover:text-cyan-400">Console</a>
-                <span>/</span>
-                <span className="text-cyan-400 font-bold">Generate</span>
-              </div>
-              <h1 className="text-lg sm:text-xl font-black tracking-tight flex items-center gap-1.5 justify-start">
-                <Plus className="w-5.5 h-5.5 text-cyan-400 animate-pulse" /> Register New Download Endpoint
-              </h1>
-              <p className="text-[11px] text-neutral-400 max-w-xl leading-snug">
-                Add premium content details below. This generates an optimized, SEO-friendly custom slug URL structure (e.g. <code className="text-cyan-400 bg-neutral-900 px-1 py-0.5 rounded font-mono text-[10px]">/leo-2024</code>) featuring countdown gates.
-              </p>
-            </div>
-
-            <div className="max-w-md mx-auto bg-neutral-900/35 border border-cyan-500/10 shadow-[0_0_35px_rgba(6,182,212,0.06)] rounded-xl p-4 sm:p-5 space-y-4 relative overflow-hidden backdrop-blur-xl">
-              {/* Ambient neon blue glow */}
-              <div className="absolute top-0 right-0 w-24 h-24 bg-cyan-500/5 rounded-full blur-[30px] pointer-events-none" />
-              <div className="absolute bottom-0 left-0 w-24 h-24 bg-indigo-500/5 rounded-full blur-[30px] pointer-events-none" />
-
-              <form onSubmit={handleAddMovie} className="space-y-3 relative z-10">
-                
-                {/* Film Title */}
-                <div className="space-y-1">
-                  <label className="text-[9px] font-bold text-neutral-400 uppercase tracking-widest font-mono block">Film Title *</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Leo"
-                    className="w-full px-3 py-2 rounded-lg bg-neutral-950 border border-neutral-800 focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/30 text-xs focus:outline-none transition text-white font-medium"
-                    value={newTitle}
-                    onChange={(e) => handleTitleChange(e.target.value)}
-                  />
-                </div>
-
-                {/* Friendly Slug Portal URL */}
-                <div className="space-y-1">
-                  <label className="text-[9px] font-bold text-neutral-400 uppercase tracking-widest font-mono flex items-center gap-1">
-                    Friendly Slug Portal URL * <span className="text-cyan-500 text-[8px] font-mono font-normal">(Dynamic link)</span>
-                  </label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-2 text-neutral-550 font-mono text-xs select-none">/</span>
-                    <input
-                      type="text"
-                      required
-                      placeholder="leo-2024"
-                      className="w-full pl-5 pr-3 py-2 rounded-lg bg-neutral-950 border border-neutral-800 text-cyan-400 font-mono focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/30 text-xs focus:outline-none transition"
-                      value={newSlug}
-                      onChange={(e) => setNewSlug(e.target.value)}
-                    />
-                  </div>
-                </div>
-
-                {/* Poster Backplate Image URL */}
-                <div className="space-y-1">
-                  <label className="text-[9px] font-bold text-neutral-400 uppercase tracking-widest font-mono block">Poster Backplate Image URL</label>
-                  <input
-                    type="url"
-                    placeholder="https://images.unsplash.com/..."
-                    className="w-full px-3 py-2 rounded-lg bg-neutral-950 border border-neutral-800 focus:border-cyan-500/50 text-xs focus:outline-none transition text-white font-mono"
-                    value={newPoster}
-                    onChange={(e) => setNewPoster(e.target.value)}
-                  />
-                  
-                  {/* Quick presets list selector */}
-                  <div className="pt-0.5 flex flex-wrap gap-1 items-center">
-                    <span className="text-[8px] text-neutral-500 uppercase font-bold tracking-widest font-mono">Presets:</span>
-                    {POSTER_PRESETS.map((p) => (
-                      <button
-                        key={p.name}
-                        type="button"
-                        onClick={() => setNewPoster(p.url)}
-                        className={`text-[8px] px-2 py-0.5 rounded border transition ${
-                          newPoster === p.url 
-                            ? 'bg-cyan-950/50 text-cyan-400 border-cyan-500/30 font-bold' 
-                            : 'bg-neutral-950 border-neutral-855 text-neutral-400 hover:text-white hover:border-neutral-700'
-                        }`}
-                      >
-                        {p.name}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Main Download Link */}
-                <div className="space-y-1">
-                  <label className="text-[9px] font-bold text-neutral-400 uppercase tracking-widest font-mono block">
-                    Core Target Torrent / Direct Download Link *
-                  </label>
-                  <input
-                    type="url"
-                    required
-                    placeholder="e.g. Magnet, Torrent, or Stream CDN URL"
-                    className="w-full px-3 py-2 rounded-lg bg-neutral-950 border border-neutral-800 text-cyan-400 font-mono focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/30 text-xs focus:outline-none transition"
-                    value={newDownload}
-                    onChange={(e) => setNewDownload(e.target.value)}
-                  />
-                  <p className="text-[8px] text-neutral-550 leading-tight">Users must complete the secure countdown handshake to unlock this address.</p>
-                </div>
-
-                {/* Synopsys Description */}
-                <div className="space-y-1">
-                  <label className="text-[9px] font-bold text-neutral-400 uppercase tracking-widest font-mono block">Synopsis Description</label>
-                  <textarea
-                    placeholder="Write brief description for the audience..."
-                    rows={2}
-                    className="w-full px-3 py-1.5 rounded-lg bg-neutral-950 border border-neutral-800 focus:border-cyan-500/50 text-xs focus:outline-none transition text-white leading-snug resize-none"
-                    value={newDesc}
-                    onChange={(e) => setNewDesc(e.target.value)}
-                  />
-                </div>
-
-                {/* Submit & Cancel */}
-                <div className="pt-2 flex items-center justify-between gap-3">
-                  <button
-                    type="submit"
-                    disabled={isSubmitting}
-                    className="flex-grow py-2.5 rounded-lg bg-gradient-to-r from-cyan-500 to-sky-600 text-neutral-950 font-black text-[11px] uppercase tracking-wider hover:shadow-[0_0_15px_rgba(6,182,212,0.3)] hover:scale-[1.01] transition-all duration-300 disabled:opacity-55 cursor-pointer"
-                  >
-                    {isSubmitting ? 'Writing to engine DB...' : 'Create Link'}
-                  </button>
-                  <a
-                    href="#/admin"
-                    className="px-4 py-2.5 rounded-lg bg-neutral-900 border border-neutral-850 text-neutral-400 hover:text-white transition text-[11px] font-bold text-center"
-                  >
-                    Cancel
-                  </a>
-                </div>
-
-              </form>
-            </div>
           </div>
         )}
 
